@@ -58,13 +58,25 @@ else
 	make targz OS=$(OS)
 endif
 
+# TODO: Build exclude list in part using content of .gitignore.
+# See https://stackoverflow.com/a/50059607 which uses
+# git -C . ls-files --exclude-standard -oi --directory
 files:
 	rm -rf dist/hapi-server-$(VERSION)
 	mkdir -p dist/hapi-server-$(VERSION)
 	rsync -aq \
 		--exclude pkg \
+		--exclude log \
 		--exclude .git \
+		--exclude '*~' \
 		--exclude public/data/QinDenton \
+		--exclude metadata/SSCWeb/SSCWeb-catalog.json \
+		--exclude metadata/SSCWeb/old/* \
+		--exclude metadata/INTERMAGNET/old/* \
+		--exclude metadata/INTERMAGNET/meta/* \
+		--exclude metadata/INTERMAGNET/ftp.seismo.nrcan.gc.ca/* \
+		--exclude metadata/INTERMAGNET/INTERMAGNET-catalog.json \
+		--exclude metadata/INTERMAGNET/html/index.htm \
 		../ dist/hapi-server-$(VERSION)
 	rm -rf dist/hapi-server-$(VERSION)/package*
 	rm -rf dist/hapi-server-$(VERSION)/.git*
