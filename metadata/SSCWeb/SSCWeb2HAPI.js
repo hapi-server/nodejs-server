@@ -1,10 +1,10 @@
-var request = require("request");
-var xml2js = require('xml2js');
-const fs = require('fs');
+const fs 	  = require('fs');
+const request = require("request");
+const xml2js  = require('xml2js');
 const process = require('process');
 
-var urlo = "https://sscweb.gsfc.nasa.gov/WS/sscr/2/observatories";
-var cfile = "SSCWeb-catalog.json";
+let urlo  = "https://sscweb.gsfc.nasa.gov/WS/sscr/2/observatories";
+let cfile = "SSCWeb-catalog.json";
 
 const force = false; // Force update even if last update was < 60 minutes.
 
@@ -12,7 +12,7 @@ let max_age = 3600; // max-age found in HTTP headers of urlo.
 // TODO: The header should be saved and the value in the header should
 // be used. If max_age changes, this code will be up-to-date.
 
-
+let debug = false;
 
 SSCWeb2HAPI(
 	function (err, catalog) {
@@ -20,16 +20,15 @@ SSCWeb2HAPI(
 			console.error(err);
 			process.exit(1);
 		}
-
-		console.log(JSON.stringify(catalog,null,4));
-		//console.log(fs.readFileSync(cfile, 'utf8'));
-		//process.exit(0);
+		console.log(catalog);
 	}
 )
 
 function getUrlo(cb) {
 	//Fetches the urlo writes it to the cfile
-	console.error("Getting " + urlo)
+	if (debug) {
+		console.error("Getting " + urlo);
+	}
 	request(urlo,
 		function (error, response, body) {
 			if (error) {
@@ -45,31 +44,33 @@ function getUrlo(cb) {
 				if (err) {
 					cb(err);
 				}
-
-				//loading the catalog file
-				fs.writeFileSync(cfile, JSON.stringify(jsonraw, null, 4));
-
-				//triggering the callback
 				makeHAPI(jsonraw, cb);
 			})
 		});
 }
 
 function SSCWeb2HAPI(cb) {
-
 	// Returns HAPI catalog or throws error if it can't reach urlo
 	// and no cached catalog is found. Only updates cached catalog
 	// if it is older than max_age.
-	var age = 0;
-	// Look for cached catalog file
-	if (fs.existsSync(cfile)) {
+	if (!fs.existsSync(cfile)) {
+		// No cached file
+		getUrlo(cb);
+	} else {
+		let age = 0;
+		if (debug) {
+			console.error("Found " + cfile);
+		}
 		age = new Date().getTime() - fs.statSync(cfile).mtime;
 		age = age / (max_age * 1000);
 		if (!force && age < 1) {
 			// Cache file less than max_age
-			//console.error("Returning cache file " + cfile + " because it is less than " + max_age + " seconds.")
-			console.log(fs.readFileSync(cfile, 'utf8'));
-			// TODO: Could pipe this.
+			if (debug) {
+				console.error("Returning cache file " 
+					+ cfile + " because it is less than " 
+					+ max_age + " seconds.")
+			}
+			cb(null, fs.readFileSync(cfile, 'utf8'));
 		} else {
 			// Save current version. Only archived by day.
 			ymd = new Date().toISOString().substring(0, 10);
@@ -83,23 +84,14 @@ function SSCWeb2HAPI(cb) {
 				.pipe(fs.createWriteStream(__dirname + "/old/" + cfilec))
 				.on('finish', function () {
 					getUrlo(cb);
-
 				});
 		}
-	} else {
-		//if there is no cached file
-		getUrlo(cb);
-
 	}
 
 }
 exports.SSCWeb2HAPI = SSCWeb2HAPI;
 
 function makeHAPI(jsonraw, cb) {
-
-	// If two requests to update at same time, only one will write
-	// cache file.
-	makeHAPI.writing = makeHAPI.writing || false;
 
 	var params = fs.readFileSync("SSCWeb-parameters.txt").toString();
 	params = params.replace(/\n\s*\n/g, '\n').replace(/\n$/, '').split(/\n/);
@@ -144,7 +136,6 @@ function makeHAPI(jsonraw, cb) {
 		  }
            
 		}
-		
 
 		var Time = {
 			"name": "Time",
@@ -157,14 +148,15 @@ function makeHAPI(jsonraw, cb) {
 		catalog[i]["info"]["parameters"].unshift(Time);
 
 	}
-	if (!makeHAPI.writing) {
-		//console.error("Writing " + cfile)
-		makeHAPI.writing = true;
-		fs.writeFile(cfile, JSON.stringify(catalog, null, 4),
-			function () {
-				makeHAPI.writing = false;
-				//console.error("Wrote " + cfile);
-			})
+	catalog = JSON.stringify(catalog, null, 4);
+	if (debug) {
+		console.error("Writing " + cfile);
 	}
+	fs.writeFile(cfile, catalog,
+		function () {
+			if (debug) {
+				console.error("Wrote " + cfile);
+			}
+		});
 	cb(null, catalog);
 }
